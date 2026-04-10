@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>מחשבון מס RSU/ESPP - E*TRADE Scan</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/tesseract.js@4.0.2/dist/tesseract.min.js"></script>
+    <style>
+        .loader { border-top-color: #3498db; animation: spinner 1.5s linear infinite; }
+        @keyframes spinner { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-900 font-sans">
+
+    <div class="max-w-4xl mx-auto py-10 px-4">
+        <header class="text-center mb-10">
+            <h1 class="text-3xl font-bold text-blue-700">מחשבון מס מניות (OCR)</h1>
+            <p class="text-gray-600 mt-2">העלה צילום מסך של ה-Vest Schedule מ-E*TRADE לחישוב מהיר</p>
+        </header>
+
+        <div class="bg-white p-6 rounded-xl shadow-md mb-8 border-2 border-dashed border-blue-200 text-center">
+            <input type="file" id="imageInput" accept="image/*" class="hidden">
+            <label for="imageInput" class="cursor-pointer inline-block bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition">
+                בחר צילום מסך מהמחשב
+            </label>
+            <p id="status" class="mt-4 text-sm text-gray-500 italic">המערכת תנתח את התאריכים והכמויות באופן מקומי בדפדפן.</p>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+            <div>
+                <label class="block text-sm font-medium">מחיר מכירה משוער ($)</label>
+                <input type="number" id="sellPrice" value="60" class="w-full mt-1 p-2 border rounded shadow-sm focus:ring-blue-500">
+            </div>
+            <div>
+                <label class="block text-sm font-medium">שער דולר (ש"ח)</label>
+                <input type="number" id="usdRate" value="3.65" step="0.01" class="w-full mt-1 p-2 border rounded shadow-sm">
+            </div>
+            <div>
+                <label class="block text-sm font-medium">מחיר ב-Vest (ממוצע/FMV)</label>
+                <input type="number" id="vestPrice" value="50" class="w-full mt-1 p-2 border rounded shadow-sm">
+            </div>
+        </div>
+
+        <div id="resultsArea" class="hidden bg-white rounded-xl shadow-lg overflow-hidden">
+            <table class="w-full text-right border-collapse">
+                <thead class="bg-gray-100">
+                    <tr>
+                        <th class="p-4 border-b">תאריך Vest</th>
+                        <th class="p-4 border-b">כמות</th>
+                        <th class="p-4 border-b text-blue-600">מרכיב שכר (ש"ח)</th>
+                        <th class="p-4 border-b text-green-600">רווח הון משוער (ש"ח)</th>
+                    </tr>
+                </thead>
+                <tbody id="tableBody">
+                    </tbody>
+            </table>
+            <div class="p-6 bg-blue-50 border-t">
+                <div class="flex justify-between items-center text-xl font-bold">
+                    <span>סה"כ רווח נטו (לפני מס):</span>
+                    <span id="totalValue" class="text-blue-800">₪0.00</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const imageInput = document.getElementById('imageInput');
+        const status = document.getElementById('status');
+        const tableBody = document.getElementById('tableBody');
+        const resultsArea = document.getElementById('resultsArea');
+
+        imageInput.addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            status.innerHTML = '<div class="loader inline-block w-4 h-4 border-4 rounded-full mr-2"></div> מעבד תמונה... אנא המתן';
+            
+            try {
+                const { data: { text } } = await Tesseract.recognize(file, 'eng');
+                processText(text);
+                status.innerText = "העיבוד הושלם! בדוק את הנתונים בטבלה.";
+            } catch (error) {
+                status.innerText = "שגיאה בעיבוד התמונה. נסה שוב.";
+            }
+        });
+
+        function processText(text) {
+            // רג'קס לזיהוי תאריכים (MM/DD/YYYY) וכמויות
+            const lines = text.split('\n');
+            const dataFound = [];
+            
+            lines.forEach(line => {
+                const dateMatch = line.match(/(\d{2}\/\d{2}\/\d{4})/);
+                const qtyMatch = line.match(/(\d{1,3}(,\d{3})*(\.\d+)?)/);
+                
+                if (dateMatch && qtyMatch) {
+                    const qty = parseFloat(qtyMatch[0].replace(/,/g, ''));
+                    if (qty > 1) { // סינון רעשים של מספרים קטנים
+                        dataFound.push({ date: dateMatch[0], qty: qty });
+                    }
+                }
+            });
+
+            renderTable(dataFound);
+        }
+
+        function renderTable(data) {
+            tableBody.innerHTML = '';
+            resultsArea.classList.remove('hidden');
+            let grandTotal = 0;
+
+            const sellPrice = parseFloat(document.getElementById('sellPrice').value);
+            const vestPrice = parseFloat(document.getElementById('vestPrice').value);
+            const usdRate = parseFloat(document.getElementById('usdRate').value);
+
+            data.forEach(item => {
+                const salaryComponent = item.qty * vestPrice * usdRate;
+                const capitalGain = item.qty * (sellPrice - vestPrice) * usdRate;
+                const total = salaryComponent + capitalGain;
+                grandTotal += total;
+
+                const row = `
+                    <tr class="hover:bg-gray-50">
+                        <td class="p-4 border-b font-mono">${item.date}</td>
+                        <td class="p-4 border-b">${item.qty.toLocaleString()}</td>
+                        <td class="p-4 border-b text-blue-600 font-semibold">₪${salaryComponent.toLocaleString(undefined, {maximumFractionDigits: 0})}</td>
+                        <td class="p-4 border-b text-green-600 font-semibold">₪${capitalGain.toLocaleString(undefined, {maximumFractionDigits: 0})}</td>
+                    </tr>
+                `;
+                tableBody.innerHTML += row;
+            });
+
+            document.getElementById('totalValue').innerText = `₪${grandTotal.toLocaleString(undefined, {maximumFractionDigits: 0})}`;
+        }
+
+        // עדכון אוטומטי כשמשנים מספרים ידנית
+        document.querySelectorAll('input[type="number"]').forEach(input => {
+            input.addEventListener('input', () => {
+                // קריאה חוזרת לפונקציית העיבוד (במידה ויש נתונים)
+                const rows = Array.from(tableBody.querySelectorAll('tr')).map(tr => {
+                    const cells = tr.querySelectorAll('td');
+                    return {
+                        date: cells[0].innerText,
+                        qty: parseFloat(cells[1].innerText.replace(/,/g, ''))
+                    };
+                });
+                if (rows.length > 0) renderTable(rows);
+            });
+        });
+    </script>
+</body>
+</html>
