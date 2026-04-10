@@ -2,166 +2,89 @@
 <html lang="he" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>מחשבון מס RSU/ESPP - סעיף 102</title>
+    <title>מחשבון מס מהיר</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/tesseract.js@4.0.2/dist/tesseract.min.js"></script>
-    <style>
-        .loader { border-top-color: #3498db; animation: spinner 1.5s linear infinite; }
-        @keyframes spinner { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-    </style>
 </head>
-<body class="bg-gray-50 text-gray-900 font-sans">
-
-    <div class="max-w-5xl mx-auto py-10 px-4">
-        <header class="text-center mb-10">
-            <h1 class="text-3xl font-bold text-blue-700">מחשבון מס מניות משודרג</h1>
-            <p class="text-gray-600 mt-2">חישוב לפי חוקי המס בישראל (הפרדה בין שכר לרווח הון)</p>
-        </header>
-
-        <div class="bg-white p-6 rounded-xl shadow-md mb-8 border-2 border-dashed border-blue-200 text-center">
-            <input type="file" id="imageInput" accept="image/*" class="hidden">
-            <label for="imageInput" class="cursor-pointer inline-block bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition">
-                בחר צילום מסך של ה-Vest Schedule
-            </label>
-            <p id="status" class="mt-4 text-sm text-gray-500 italic">המידע מעובד מקומית בלבד.</p>
+<body class="bg-gray-100 p-8 text-right">
+    <div class="max-w-2xl mx-auto bg-white p-6 rounded-2xl shadow-xl">
+        <h1 class="text-2xl font-bold mb-4 text-blue-600">מחשבון מניות אוטומטי</h1>
+        
+        <div class="mb-6 p-4 border-2 border-dashed border-gray-300 rounded-lg text-center">
+            <input type="file" id="img" accept="image/*" class="hidden">
+            <label for="img" class="cursor-pointer text-blue-500 font-bold">לחץ כאן להעלאת צילום המסך</label>
+            <p id="status" class="text-sm text-gray-400 mt-2 italic">המערכת תזהה לבד תאריכים וכמויות</p>
         </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8 bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+        <div class="grid grid-cols-2 gap-4 mb-6">
             <div>
-                <label class="block text-sm font-bold text-gray-700">מחיר מכירה ($)</label>
-                <input type="number" id="sellPrice" value="60" class="w-full mt-1 p-2 border rounded border-blue-300 focus:ring-2 focus:ring-blue-500 outline-none">
+                <label class="block text-sm">מחיר מכירה היום ($)</label>
+                <input type="number" id="sell" value="65" class="w-full p-2 border rounded">
             </div>
             <div>
-                <label class="block text-sm font-bold text-gray-700">מחיר ממוצע ב-Grant (30 יום)</label>
-                <input type="number" id="avgGrantPrice" value="46.28" class="w-full mt-1 p-2 border rounded border-blue-300 outline-none" title="הנתון שמופיע ב-E*TRADE כ-Grant Date Market Value">
-            </div>
-            <div>
-                <label class="block text-sm font-bold text-gray-700">מחיר ב-Vest (FMV)</label>
-                <input type="number" id="vestPrice" value="50" class="w-full mt-1 p-2 border rounded border-blue-300 outline-none">
-            </div>
-            <div>
-                <label class="block text-sm font-bold text-gray-700">שער דולר (ש"ח)</label>
-                <input type="number" id="usdRate" value="3.65" step="0.01" class="w-full mt-1 p-2 border rounded border-blue-300 outline-none">
+                <label class="block text-sm">שער דולר משוער</label>
+                <input type="number" id="usd" value="3.65" step="0.01" class="w-full p-2 border rounded">
             </div>
         </div>
 
-        <div id="resultsArea" class="hidden bg-white rounded-xl shadow-lg overflow-hidden border border-gray-200">
-            <div class="p-4 bg-gray-50 border-b flex justify-between items-center">
-                <span class="font-bold text-gray-700 underline text-lg">פירוט מנות (Tranches)</span>
-                <span class="text-xs text-gray-500">ניתן לערוך כמויות ותאריכים ישירות בטבלה</span>
+        <div id="out" class="hidden">
+            <div class="bg-blue-50 p-4 rounded-lg mb-4">
+                <div class="flex justify-between border-b pb-2 mb-2">
+                    <span>סה"כ נטו מוערך (ש"ח):</span>
+                    <span id="net" class="font-bold text-xl text-blue-800">₪0</span>
+                </div>
+                <div class="text-sm text-gray-600">
+                    <p>מתוכם כתוספת לשכר: <span id="salaryPart">₪0</span></p>
+                    <p>מתוכם כרווח הון (25% מס): <span id="capPart">₪0</span></p>
+                </div>
             </div>
-            <table class="w-full text-right border-collapse">
-                <thead class="bg-gray-100 text-sm">
-                    <tr>
-                        <th class="p-4 border-b">תאריך Vest</th>
-                        <th class="p-4 border-b">כמות</th>
-                        <th class="p-4 border-b text-orange-600">מרכיב שכר (מס שולי)</th>
-                        <th class="p-4 border-b text-green-600">רווח הון (25%)</th>
-                        <th class="p-4 border-b">סה"כ בש"ח (ברוטו)</th>
-                    </tr>
-                </thead>
-                <tbody id="tableBody"></tbody>
+            <table class="w-full text-sm">
+                <thead><tr class="border-b"><th>תאריך</th><th>כמות</th><th>שווי ברוטו</th></tr></thead>
+                <tbody id="rows"></tbody>
             </table>
-            
-            <div class="p-8 bg-blue-900 text-white">
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
-                    <div>
-                        <p class="text-blue-200 text-sm mb-1">סה"כ הכנסת עבודה (חייב במס שולי):</p>
-                        <p id="totalSalary" class="text-2xl font-bold">₪0</p>
-                    </div>
-                    <div>
-                        <p class="text-blue-200 text-sm mb-1">סה"כ רווח הון (חייב ב-25%):</p>
-                        <p id="totalCapital" class="text-2xl font-bold text-green-400">₪0</p>
-                    </div>
-                </div>
-                <hr class="my-6 border-blue-800">
-                <div class="flex justify-between items-end">
-                    <div>
-                        <p class="text-blue-200 text-sm">סה"כ שווי מכירה ברוטו:</p>
-                        <p id="grandTotal" class="text-4xl font-extrabold">₪0</p>
-                    </div>
-                    <p class="text-xs text-blue-300 max-w-xs">*החישוב מתבסס על הנתון הנמוך מבין מחיר ה-Vest למחיר הממוצע ב-Grant עבור מרכיב השכר.</p>
-                </div>
-            </div>
         </div>
     </div>
 
     <script>
-        const imageInput = document.getElementById('imageInput');
-        const status = document.getElementById('status');
-        const tableBody = document.getElementById('tableBody');
-        const resultsArea = document.getElementById('resultsArea');
+        const GRANT_PRICE = 46.28; // הנתון מהתמונה שלך
 
-        imageInput.addEventListener('change', async (e) => {
-            const file = e.target.files[0];
-            if (!file) return;
-            status.innerHTML = '<div class="loader inline-block w-4 h-4 border-4 rounded-full mr-2"></div> סורק נתונים...';
-            try {
-                const { data: { text } } = await Tesseract.recognize(file, 'eng');
-                processText(text);
-                status.innerText = "העיבוד הושלם בהצלחה!";
-            } catch (error) { status.innerText = "שגיאה. נסה להעלות צילום ברור יותר."; }
-        });
-
-        function processText(text) {
-            const lines = text.split('\n');
-            const dataFound = [];
-            lines.forEach(line => {
-                const dateMatch = line.match(/(\d{2}\/\d{2}\/\d{4})/);
-                const qtyMatch = line.match(/(\d{1,3}(,\d{3})*(\.\d+)?)/);
-                if (dateMatch && qtyMatch) {
-                    const qty = parseFloat(qtyMatch[0].replace(/,/g, ''));
-                    if (qty > 1) dataFound.push({ date: dateMatch[0], qty: qty });
+        document.getElementById('img').onchange = async (e) => {
+            const status = document.getElementById('status');
+            status.innerText = "מעבד...";
+            const { data: { text } } = await Tesseract.recognize(e.target.files[0], 'eng');
+            
+            const data = [];
+            text.split('\n').forEach(line => {
+                const d = line.match(/(\d{2}\/\d{2}\/\d{4})/);
+                const q = line.match(/(\d{1,3}(,\d{3})*)/);
+                if (d && q) {
+                    const qty = parseFloat(q[0].replace(/,/g, ''));
+                    if (qty > 10) data.push({ date: d[0], qty });
                 }
             });
-            renderTable(dataFound);
-        }
+            calc(data);
+        };
 
-        function renderTable(data) {
-            tableBody.innerHTML = '';
-            resultsArea.classList.remove('hidden');
-            
-            let sumSalary = 0, sumCapital = 0;
-            const sellPrice = parseFloat(document.getElementById('sellPrice').value);
-            const vestPrice = parseFloat(document.getElementById('vestPrice').value);
-            const avgGrantPrice = parseFloat(document.getElementById('avgGrantPrice').value);
-            const usdRate = parseFloat(document.getElementById('usdRate').value);
-
-            // הנתון הקובע למס שולי לפי סעיף 102
-            const costBasisForSalary = Math.min(vestPrice, avgGrantPrice);
+        function calc(data) {
+            const sell = parseFloat(document.getElementById('sell').value);
+            const usd = parseFloat(document.getElementById('usd').value);
+            let totalSalary = 0, totalCap = 0, html = "";
 
             data.forEach(item => {
-                const salaryComp = item.qty * costBasisForSalary * usdRate;
-                const capitalComp = item.qty * (sellPrice - costBasisForSalary) * usdRate;
-                
-                sumSalary += salaryComp;
-                sumCapital += capitalComp;
-
-                tableBody.innerHTML += `
-                    <tr class="hover:bg-gray-50 border-b">
-                        <td class="p-4 font-mono">${item.date}</td>
-                        <td class="p-4">${item.qty.toLocaleString()}</td>
-                        <td class="p-4 text-orange-600 font-semibold">₪${salaryComp.toLocaleString(undefined, {maximumFractionDigits: 0})}</td>
-                        <td class="p-4 text-green-600 font-semibold">₪${capitalComp.toLocaleString(undefined, {maximumFractionDigits: 0})}</td>
-                        <td class="p-4 font-bold">₪${(salaryComp + capitalComp).toLocaleString(undefined, {maximumFractionDigits: 0})}</td>
-                    </tr>`;
+                const salary = item.qty * GRANT_PRICE * usd;
+                const cap = item.qty * (sell - GRANT_PRICE) * usd;
+                totalSalary += salary;
+                totalCap += cap;
+                html += `<tr class="border-b"><td>${item.date}</td><td>${item.qty}</td><td>₪${(salary+cap).toLocaleString()}</td></tr>`;
             });
 
-            document.getElementById('totalSalary').innerText = `₪${sumSalary.toLocaleString(undefined, {maximumFractionDigits: 0})}`;
-            document.getElementById('totalCapital').innerText = `₪${sumCapital.toLocaleString(undefined, {maximumFractionDigits: 0})}`;
-            document.getElementById('grandTotal').innerText = `₪${(sumSalary + sumCapital).toLocaleString(undefined, {maximumFractionDigits: 0})}`;
+            document.getElementById('rows').innerHTML = html;
+            document.getElementById('salaryPart').innerText = `₪${totalSalary.toLocaleString()}`;
+            document.getElementById('capPart').innerText = `₪${totalCap.toLocaleString()}`;
+            document.getElementById('net').innerText = `₪${(totalSalary + totalCap).toLocaleString()}`;
+            document.getElementById('out').classList.remove('hidden');
+            document.getElementById('status').innerText = "הסריקה הושלמה!";
         }
-
-        document.querySelectorAll('input').forEach(input => {
-            input.addEventListener('input', () => {
-                const rows = Array.from(tableBody.querySelectorAll('tr')).map(tr => ({
-                    date: tr.cells[0].innerText,
-                    qty: parseFloat(tr.cells[1].innerText.replace(/,/g, ''))
-                }));
-                if (rows.length > 0) renderTable(rows);
-            });
-        });
     </script>
 </body>
 </html>
